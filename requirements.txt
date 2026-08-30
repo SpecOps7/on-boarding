@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+rank-bm25
+pypdf
+python-docx
+openpyxl

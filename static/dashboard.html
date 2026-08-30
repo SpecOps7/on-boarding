@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deal Pipeline Dashboard</title>
+<style>
+  :root {
+    --bg: #f9f9f7; --panel: #fcfcfb; --border: #e2e5ea; --text: #0b0b0b;
+    --muted: #898781; --secondary: #52514e; --accent: #2563eb;
+    --line: #e1e0d9; --hover: #f2f2ef; --chip: #f1f3f6; --err: #dc2626;
+    /* chart series (reference palette, light) */
+    --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100;
+    --seq-1: #86b6ef; --seq-2: #6da7ec; --seq-3: #5598e7; --seq-4: #2a78d6; --seq-5: #256abf; --seq-6: #104281;
+    --neutral-bar: #c3c2b7;
+    color-scheme: light;
+  }
+  html[data-theme="dark"] {
+    --bg: #0d0d0d; --panel: #1a1a19; --border: #2c2c2a; --text: #ffffff;
+    --muted: #898781; --secondary: #c3c2b7; --accent: #4f8df9;
+    --line: #2c2c2a; --hover: #22221f; --chip: #232b3c; --err: #f87171;
+    --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500;
+    --seq-1: #184f95; --seq-2: #1c5cab; --seq-3: #256abf; --seq-4: #3987e5; --seq-5: #6da7ec; --seq-6: #9ec5f4;
+    --neutral-bar: #383835;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    padding: 10px 22px; background: var(--panel); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 16px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12px; flex: 1; }
+  header a { color: var(--accent); text-decoration: none; font-size: 13px; }
+  header button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--secondary);
+    border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+  }
+  header button:hover { color: var(--accent); border-color: var(--accent); }
+  header button.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 18px 22px 40px; }
+
+  /* filters */
+  #filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  #filters select, #filters input {
+    border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+    color: var(--text); padding: 6px 10px; font: inherit; font-size: 13px;
+  }
+  #filters input { min-width: 220px; }
+  #scan-note { font-size: 12px; color: var(--muted); }
+  #scan-progress { font-size: 12px; color: var(--secondary); display: none; }
+
+  /* stat tiles */
+  #tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .tile {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px;
+  }
+  .tile .label { font-size: 12px; color: var(--secondary); }
+  .tile .value { font-size: 26px; font-weight: 650; margin-top: 2px; }
+  .tile .hint { font-size: 11px; color: var(--muted); }
+
+  /* charts */
+  #charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+  @media (max-width: 900px) { #charts { grid-template-columns: 1fr; } }
+  .chart-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+  }
+  .chart-card h3 { margin: 0 0 2px; font-size: 13px; }
+  .chart-card .chart-sub { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .chart-card svg { width: 100%; height: auto; display: block; }
+  .chart-card text { font-family: inherit; }
+
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 40; display: none;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  }
+  #tooltip .t-label { color: var(--secondary); }
+  #tooltip .t-value { font-weight: 650; }
+
+  /* table */
+  #table-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); cursor: pointer; user-select: none; }
+  tbody tr:hover { background: var(--hover); }
+  td.num { font-variant-numeric: tabular-nums; }
+  .cat-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 0; }
+  .stage-pill {
+    display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 11px;
+    background: var(--chip); color: var(--secondary);
+  }
+  .ev-chip {
+    display: inline-block; padding: 0 7px; border-radius: 9px; font-size: 10px;
+    background: var(--chip); color: var(--muted); margin-right: 3px; cursor: help;
+  }
+  td select {
+    border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+    color: var(--text); font-size: 12px; padding: 2px 6px;
+  }
+  .override-mark { color: var(--accent); font-size: 10px; margin-left: 4px; }
+  #empty { padding: 40px; text-align: center; color: var(--muted); }
+  .name-cell { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+
+  /* status colors (reserved palette — always icon + label, never color alone) */
+  :root { --st-good: #0ca30c; --st-warn: #fab219; --st-serious: #ec835a; --st-critical: #d03b3b; }
+  .due-badge {
+    display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
+    border-radius: 9px; font-size: 11px; font-weight: 600; background: var(--chip);
+  }
+  .due-badge.b-critical { color: var(--st-critical); }
+  .due-badge.b-serious { color: var(--st-serious); }
+  .due-badge.b-warn { color: var(--st-warn); }
+  .due-badge.b-good { color: var(--st-good); }
+
+  /* deadlines card */
+  #deadlines-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 18px;
+  }
+  #deadlines-card h3 { margin: 0 0 2px; font-size: 13px; }
+  #deadlines-card .chart-sub { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .due-row {
+    display: flex; align-items: center; gap: 10px; padding: 6px 4px;
+    border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .due-row:last-child { border-bottom: 0; }
+  .due-row .due-date { color: var(--secondary); font-variant-numeric: tabular-nums; width: 92px; }
+  .due-row .due-what { color: var(--secondary); width: 190px; }
+  .due-row .due-prop { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #deadlines-empty { color: var(--muted); font-size: 12px; padding: 8px 4px; }
+
+  /* inbox review card */
+  #inbox-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 18px;
+  }
+  #inbox-card h3 { margin: 0 0 2px; font-size: 13px; display: flex; align-items: center; gap: 10px; }
+  #inbox-card .chart-sub { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  #inbox-card h3 .count { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .prop-card {
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
+    background: var(--bg);
+  }
+  .prop-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+  .prop-head .subj { font-weight: 600; flex: 1; min-width: 200px; }
+  .prop-head .meta { color: var(--muted); font-size: 11px; }
+  .prop-head select {
+    border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+    color: var(--text); font-size: 12px; padding: 2px 6px; max-width: 280px;
+  }
+  .prop-body { margin-top: 6px; font-size: 12px; }
+  .prop-excerpt {
+    color: var(--secondary); white-space: pre-wrap; max-height: 0; overflow: hidden;
+    transition: max-height .2s; border-left: 2px solid var(--border); padding-left: 8px;
+  }
+  .prop-excerpt.open { max-height: 320px; overflow-y: auto; margin: 6px 0; }
+  .prop-toggle { color: var(--accent); cursor: pointer; font-size: 11px; }
+  .change { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  .change input { accent-color: var(--accent); }
+  .change .k { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); width: 42px; }
+  .prop-actions { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .prop-actions button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 6px; padding: 4px 12px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .prop-actions button.go { background: var(--st-good); border-color: var(--st-good); color: #fff; }
+  .prop-actions button.nogo { color: var(--st-critical); }
+  .prop-actions .result { font-size: 11px; color: var(--muted); }
+  .conf { font-size: 10px; padding: 0 6px; border-radius: 8px; background: var(--chip); color: var(--muted); }
+  .inbox-section { margin-top: 10px; }
+  .inbox-section summary { cursor: pointer; font-size: 12px; color: var(--secondary); }
+  .um-row { display: flex; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+  .um-row .subj { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .um-row select { max-width: 260px; font-size: 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); }
+  .mono { font-variant-numeric: tabular-nums; }
+
+  /* action items card */
+  #actions-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 18px;
+  }
+  #actions-card h3 { margin: 0 0 2px; font-size: 13px; }
+  #actions-card .chart-sub { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .adv-prop { padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  .adv-prop:last-child { border-bottom: 0; }
+  .adv-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .adv-head .nm { font-weight: 600; cursor: pointer; }
+  .adv-head .nm:hover { color: var(--accent); }
+  .adv-head .stg { font-size: 11px; color: var(--muted); flex: 1; }
+  .adv-head button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+    border-radius: 6px; padding: 1px 8px; font-size: 11px; cursor: pointer;
+  }
+  .adv-head button:hover { color: var(--accent); border-color: var(--accent); }
+  .adv-action { display: flex; gap: 8px; align-items: baseline; font-size: 12px; padding: 2px 0 2px 8px; }
+  .adv-action .txt { color: var(--text); }
+  .adv-action .why { color: var(--muted); font-size: 11px; }
+  .adv-deep {
+    margin: 4px 0 2px 8px; padding: 8px 10px; border-left: 2px solid var(--accent);
+    background: var(--hover); font-size: 12px; white-space: pre-wrap; color: var(--secondary);
+  }
+  #actions-more { font-size: 12px; color: var(--accent); cursor: pointer; padding: 6px 4px; }
+
+  /* missing-docs card */
+  #missing-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 18px;
+  }
+  #missing-card h3 { margin: 0 0 2px; font-size: 13px; }
+  #missing-card .chart-sub { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .missing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .missing-grid { grid-template-columns: 1fr; } }
+  .gap-row {
+    display: flex; align-items: flex-start; gap: 10px; padding: 6px 4px;
+    border-bottom: 1px solid var(--line); font-size: 12px;
+  }
+  .gap-row:last-child { border-bottom: 0; }
+  .gap-row .gap-prop { width: 230px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .gap-row .gap-prop:hover { color: var(--accent); }
+  .gap-row .gap-items { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
+  .gap-chip { padding: 0 7px; border-radius: 9px; font-size: 10px; background: var(--chip); color: var(--st-serious); }
+  #gaps-more { font-size: 12px; color: var(--accent); cursor: pointer; padding: 6px 4px; }
+  #filters label { font-size: 13px; color: var(--secondary); display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+  /* checklist detail row */
+  tr.detail-row td { background: var(--hover); padding: 12px 16px 14px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
+  .detail-grid h4 { margin: 0 0 6px; font-size: 12px; color: var(--secondary); }
+  .chk { font-size: 12px; padding: 2px 0; }
+  .chk .ok { color: var(--st-good); }
+  .chk .miss { color: var(--st-serious); }
+  .chk .future { color: var(--muted); }
+  .chk .file { color: var(--muted); font-size: 11px; }
+  .chk-stage { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 8px 0 2px; }
+  .date-line { font-size: 12px; padding: 2px 0; }
+  .date-line .k { color: var(--secondary); display: inline-block; width: 170px; }
+  .miss-chip {
+    display: inline-block; padding: 0 8px; border-radius: 9px; font-size: 11px;
+    background: var(--chip); color: var(--st-serious); font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Deal Pipeline</h1>
+  <span class="sub" id="scan-meta">loading…</span>
+  <span id="scan-progress"></span>
+  <button id="scan-btn" class="primary" title="Re-scan every property folder in Box (file names only)">Scan now</button>
+  <button id="dates-btn" title="Have Claude read each active deal's LOI/PSA/estoppel and extract critical dates">📅 Extract dates</button>
+  <button id="mail-btn" title="Pull new mail from classic Outlook, file it by property, and propose workflow changes">✉ Check mail</button>
+  <button id="recat-btn" title="Re-run categorization over all pulled mail with the current rules and re-file what changed">↻ Re-categorize</button>
+  <select id="mail-poll" title="Automatically check mail on a schedule">
+    <option value="0">auto-check: off</option><option value="15">every 15 min</option><option value="60">every hour</option>
+  </select>
+  <button id="theme-btn" title="Toggle dark / light mode">🌙</button>
+  <a href="/">← Q&amp;A app</a>
+</header>
+<main>
+  <div id="filters">
+    <select id="f-category"><option value="">All categories</option></select>
+    <select id="f-stage"><option value="">All stages</option></select>
+    <input id="f-search" type="search" placeholder="Search properties…">
+    <label><input id="f-gaps" type="checkbox"> only properties with missing docs</label>
+    <span id="scan-note"></span>
+  </div>
+  <div id="tiles"></div>
+  <div id="inbox-card">
+    <h3>Inbox review <span class="count" id="inbox-count"></span></h3>
+    <div class="chart-sub" id="inbox-sub">proposed workflow changes from email — approve (go) or reject (no-go); nothing changes until you decide</div>
+    <div id="proposals"></div>
+    <details class="inbox-section" id="filed-section"><summary id="filed-summary">Filed emails</summary><div id="filed-list"></div></details>
+    <details class="inbox-section" id="unmatched-section"><summary id="unmatched-summary">Unmatched emails</summary><div id="unmatched-list"></div></details>
+    <details class="inbox-section" id="decided-section"><summary id="decided-summary">Decided</summary><div id="decided-list"></div></details>
+  </div>
+  <div id="actions-card">
+    <h3>Action items</h3>
+    <div class="chart-sub">what each engagement needs next — from its stage, missing documents, critical dates, and email. Hover an item for the reason; "advise" asks Claude for a deeper read.</div>
+    <div id="actions-list"></div>
+  </div>
+  <div id="deadlines-card">
+    <h3>Upcoming deadlines</h3>
+    <div class="chart-sub">critical dates extracted from each active deal's documents (overdue first)</div>
+    <div id="deadlines"></div>
+  </div>
+  <div id="missing-card">
+    <h3>What's missing</h3>
+    <div class="chart-sub">Deal Timeline items expected by each property's stage but with no matching file — click a property to open its full checklist</div>
+    <div class="missing-grid">
+      <div id="chart-missing"></div>
+      <div id="gaps-list"></div>
+    </div>
+  </div>
+  <div id="charts">
+    <div class="chart-card">
+      <h3>Properties by pipeline stage</h3>
+      <div class="chart-sub">count of filtered properties at each furthest-evidence stage</div>
+      <div id="chart-stage"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Properties by category</h3>
+      <div class="chart-sub">filtered properties per portfolio category</div>
+      <div id="chart-category"></div>
+    </div>
+  </div>
+  <div id="table-card">
+    <table>
+      <thead><tr>
+        <th data-k="name">Property</th><th data-k="category">Category</th>
+        <th data-k="stage_idx">Stage</th><th>Evidence</th><th>Missing</th>
+        <th data-k="n_files" class="num">Files</th><th data-k="last_activity">Last activity</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="empty" hidden>No properties match the current filters.</div>
+  </div>
+</main>
+<div id="tooltip"></div>
+<script>
+const $ = id => document.getElementById(id);
+const api = async (url, opts) => {
+  const r = await fetch(url, opts);
+  if (!r.ok) { let d = r.statusText; try { d = (await r.json()).detail || d; } catch {} throw new Error(d); }
+  return r.json();
+};
+const store = {
+  get(k) { try { return localStorage.getItem('boxqa.' + k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem('boxqa.' + k, v); } catch {} },
+};
+
+/* theme (shared key with the Q&A app) */
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  $('theme-btn').textContent = t === 'dark' ? '☀️' : '🌙';
+  render(); // re-read CSS vars for chart colors
+}
+$('theme-btn').onclick = () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  store.set('theme', next); applyTheme(next);
+};
+
+let DATA = { stages: [], items: [], properties: [] };
+let DATES = { fields: [], properties: {} };
+let sortKey = 'stage_idx', sortDir = -1;
+let expandedPath = null;
+
+const CAT_ORDER = ['Urgent Care', 'Dental Care', 'Retail', 'Other'];  // fixed slot order
+const catVar = c => `--cat-${CAT_ORDER.indexOf(c) + 1 || 4}`;
+
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function stageLabel(idx) {
+  return idx === 0 ? 'Not started' : (DATA.stages[idx - 1] || {}).label || '?';
+}
+
+/* ---------- filtering ---------- */
+function filtered() {
+  const cat = $('f-category').value, st = $('f-stage').value,
+        q = $('f-search').value.trim().toLowerCase();
+  const gapsOnly = $('f-gaps').checked;
+  return DATA.properties.filter(p =>
+    (!cat || p.category === cat) &&
+    (st === '' || String(p.stage_idx) === st) &&
+    (!gapsOnly || (p.missing || []).length > 0) &&
+    (!q || p.name.toLowerCase().includes(q)));
+}
+
+/* ---------- inbox review (go / no-go) ---------- */
+let MAIL = { proposals: [], decided: [], unmatched: [], filed: [], summary: {} };
+
+async function loadMail() {
+  try {
+    const [pend, all, um, filed, sum] = await Promise.all([
+      api('/api/mail/proposals?status_filter=pending'), api('/api/mail/proposals?status_filter=all'),
+      api('/api/mail/unmatched'), api('/api/mail/filed'), api('/api/mail/summary')]);
+    MAIL = { proposals: pend.proposals, decided: all.proposals.filter(p => p.status !== 'pending'),
+             unmatched: um.unmatched, filed: filed.filed, summary: sum };
+  } catch (e) { MAIL.error = e.message; }
+  renderInbox();
+}
+
+function propertyOptions(selected) {
+  const cats = {};
+  [...DATA.properties].sort((a, b) => a.name.localeCompare(b.name))
+    .forEach(p => (cats[p.category] = cats[p.category] || []).push(p));
+  return '<option value="">— pick a property —</option>' + Object.entries(cats).map(([c, ps]) =>
+    `<optgroup label="${esc(c)}">` + ps.map(p =>
+      `<option value="${esc(p.box_path)}" ${p.box_path === selected ? 'selected' : ''}>${esc(p.name)}</option>`).join('') + '</optgroup>').join('');
+}
+
+function renderInbox() {
+  const s = MAIL.summary || {};
+  $('inbox-count').textContent = MAIL.error ? '' :
+    `${MAIL.proposals.length} pending · ${s.messages || 0} emails read · ${s.matched || 0} matched · ${s.filed || 0} filed` +
+    (s.last_pull ? ` · last check ${new Date(s.last_pull * 1000).toLocaleString()}` : '');
+  if ($('mail-poll').value !== String((s.settings || {}).auto_poll_minutes ?? 0)) $('mail-poll').value = String((s.settings || {}).auto_poll_minutes ?? 0);
+  const box = $('proposals');
+  if (MAIL.error) { box.innerHTML = `<div id="deadlines-empty" style="color:var(--err)">${esc(MAIL.error)}</div>`; return; }
+  if (!MAIL.proposals.length) {
+    box.innerHTML = `<div id="deadlines-empty">${s.messages ? 'Nothing waiting for a decision.' :
+      'No mail pulled yet — click “✉ Check mail” (classic Outlook must have the account set up).'}</div>`;
+  } else {
+    box.innerHTML = MAIL.proposals.map(p => `
+      <div class="prop-card" data-id="${p.id}">
+        <div class="prop-head">
+          <span class="subj" title="${esc(p.email.subject || '')}">${esc(p.email.subject || '(no subject)')}</span>
+          <span class="meta">${esc(p.email.sender || '')} · ${(p.email.received || '').slice(0, 10)} · ${esc(p.email.folder || '')}</span>
+          ${p.doc_type ? `<span class="ev-chip">${esc(p.doc_type)}${p.executed ? ' · executed' : ''}${p.draft ? ' · draft' : ''}</span>` : ''}
+          <select class="reassign" title="matched by: ${esc(p.match_reason || '')}">${propertyOptions(p.box_path)}</select>
+          <span class="conf" title="match confidence">${Math.round((p.confidence || 0) * 100)}%</span>
+        </div>
+        <div class="prop-body">
+          <span class="prop-toggle">show email ▾</span>
+          <div class="prop-excerpt">${esc(p.email.excerpt || '')}${p.email.attachments?.length ? '\n\n📎 ' + esc(p.email.attachments.join(', ')) : ''}</div>
+          ${p.notes ? `<div style="color:var(--secondary);margin:4px 0">${esc(p.notes)}</div>` : ''}
+          ${p.changes.map((c, i) => `<label class="change"><input type="checkbox" data-i="${i}" checked>
+             <span class="k">${c.kind}</span><span>${esc(c.label)}</span></label>`).join('')}
+        </div>
+        <div class="prop-actions">
+          <button class="go">✓ Approve selected (go)</button>
+          <button class="nogo">✗ Reject (no-go)</button>
+          <span class="result"></span>
+        </div>
+      </div>`).join('');
+    box.querySelectorAll('.prop-card').forEach(card => {
+      const id = card.dataset.id;
+      card.querySelector('.prop-toggle').onclick = e => {
+        const ex = card.querySelector('.prop-excerpt'); ex.classList.toggle('open');
+        e.target.textContent = ex.classList.contains('open') ? 'hide email ▴' : 'show email ▾';
+      };
+      card.querySelector('.go').onclick = async () => {
+        const accept = [...card.querySelectorAll('.change input')].filter(i => i.checked).map(i => +i.dataset.i);
+        card.querySelector('.result').innerHTML = '<span class="spinner"></span>applying…';
+        try {
+          const r = await api(`/api/mail/proposals/${id}/approve`, { method: 'POST',
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accept }) });
+          const bad = r.changes.filter(c => c.accepted && c.result && c.result.ok === false);
+          if (bad.length) alert('Some changes failed:\n' + bad.map(c => c.label + ': ' + c.result.error).join('\n'));
+        } catch (e) { alert('Approve failed: ' + e.message); }
+        await Promise.all([load(false), loadMail()]);
+      };
+      card.querySelector('.nogo').onclick = async () => {
+        try { await api(`/api/mail/proposals/${id}/reject`, { method: 'POST' }); }
+        catch (e) { alert('Reject failed: ' + e.message); }
+        await loadMail();
+      };
+      card.querySelector('.reassign').onchange = async e => {
+        const p = MAIL.proposals.find(x => x.id === id);
+        if (!e.target.value || !p) return;
+        try { await api(`/api/mail/assign/${encodeURIComponent(p.entry_id)}`, { method: 'POST',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ box_path: e.target.value }) });
+        } catch (err) { alert('Re-assign failed: ' + err.message); }
+        await loadMail();
+      };
+    });
+  }
+
+  // filed
+  $('filed-summary').textContent = `Filed emails (${MAIL.filed.length}) — matched to a property and moved into Inbox\\Deals\\…`;
+  $('filed-list').innerHTML = MAIL.filed.length ? MAIL.filed.slice(0, 60).map(m => `<div class="um-row">
+      <span class="mono" style="color:var(--muted)">${(m.received || '').slice(0, 10)}</span>
+      <span class="subj" title="${esc(m.subject || '')}">${esc(m.subject || '(no subject)')}</span>
+      <span style="color:var(--secondary)">${esc(m.property)}</span>
+      <span class="conf" title="${esc(m.reason || '')}">${Math.round((m.confidence || 0) * 100)}%</span>
+      <span style="color:var(--muted);font-size:11px">${m.outlook_folder ? esc(m.outlook_folder.replace(/^\\\\/, '')) : (m.folder === 'Sent' ? 'sent (not moved)' : (m.file_error ? '⚠ ' + esc(m.file_error) : 'not filed'))}</span>
+    </div>`).join('') : '<div id="deadlines-empty">none yet</div>';
+
+  // unmatched
+  $('unmatched-summary').textContent = `Unmatched emails (${MAIL.unmatched.length}) — left where they are; assign one to a property if it belongs to a deal`;
+  $('unmatched-list').innerHTML = MAIL.unmatched.length ? MAIL.unmatched.slice(0, 60).map(m => `<div class="um-row">
+      <span class="mono" style="color:var(--muted)">${(m.received || '').slice(0, 10)}</span>
+      <span class="subj" title="${esc(m.subject || '')}">${esc(m.subject || '(no subject)')} <span style="color:var(--muted)">— ${esc(m.sender || '')}${m.attachments?.length ? ' 📎' + m.attachments.length : ''}</span></span>
+      <select data-entry="${esc(m.entry_id)}">${propertyOptions('')}</select>
+    </div>`).join('') : '<div id="deadlines-empty">none</div>';
+  $('unmatched-list').querySelectorAll('select').forEach(sel => sel.onchange = async e => {
+    if (!e.target.value) return;
+    try { await api(`/api/mail/assign/${encodeURIComponent(sel.dataset.entry)}`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ box_path: e.target.value }) });
+    } catch (err) { alert('Assign failed: ' + err.message); }
+    await loadMail();
+  });
+
+  // decided
+  $('decided-summary').textContent = `Decided (${MAIL.decided.length})`;
+  $('decided-list').innerHTML = MAIL.decided.length ? MAIL.decided.slice(0, 40).map(p => `<div class="um-row">
+      <span class="mono" style="color:var(--muted)">${p.decided_at ? new Date(p.decided_at * 1000).toISOString().slice(0, 10) : ''}</span>
+      <span class="due-badge ${p.status === 'approved' ? 'b-good' : p.status === 'rejected' ? 'b-critical' : ''}">${p.status === 'approved' ? '✓ go' : p.status === 'rejected' ? '✗ no-go' : esc(p.status)}</span>
+      <span class="subj" title="${esc(p.email.subject || '')}">${esc(p.email.subject || '')}</span>
+      <span style="color:var(--secondary)">${esc(p.property_name)}</span>
+      <span style="color:var(--muted);font-size:11px">${p.changes.filter(c => c.accepted).map(c => c.label).join(' · ')}</span>
+    </div>`).join('') : '<div id="deadlines-empty">none yet</div>';
+}
+
+$('mail-btn').onclick = () => runJob('/api/mail/pull', $('mail-btn'), 'Mail check').then(loadMail);
+$('recat-btn').onclick = () => runJob('/api/mail/recategorize', $('recat-btn'), 'Re-categorize').then(loadMail);
+$('mail-poll').onchange = async e => {
+  await api('/api/mail/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ auto_poll_minutes: +e.target.value }) });
+};
+
+/* ---------- action items (advisor) ---------- */
+let ADVICE = { properties: [] };
+let adviceExpanded = false;
+const deepAdvice = {};   // box_path -> text
+
+const PRIO_BADGE = { critical: ['b-critical', '⚠ critical'], high: ['b-serious', '⏰ high'],
+                     medium: ['b-warn', '◔ medium'], low: ['b-good', '· low'] };
+
+async function loadAdvice() {
+  try { ADVICE = await api('/api/advice'); } catch (e) { ADVICE = { properties: [], error: e.message }; }
+  renderActions();
+}
+
+function renderActions() {
+  const box = $('actions-list');
+  if (!box) return;
+  if (ADVICE.error) { box.innerHTML = `<div id="deadlines-empty" style="color:var(--err)">${esc(ADVICE.error)}</div>`; return; }
+  const visible = new Set(filtered().map(r => r.box_path));
+  const props = ADVICE.properties.filter(p => visible.has(p.box_path));
+  if (!props.length) { box.innerHTML = '<div id="deadlines-empty">No action items for the current filter.</div>'; return; }
+  const shown = adviceExpanded ? props : props.slice(0, 8);
+  box.innerHTML = shown.map(p => `
+    <div class="adv-prop" data-path="${esc(p.box_path)}">
+      <div class="adv-head">
+        <span class="nm" title="open checklist">${esc(p.name)}</span>
+        <span class="stg">${stageLabel(p.stage_idx)}</span>
+        <button class="deep">🧭 advise</button>
+      </div>
+      ${p.actions.map(a => {
+        const [cls, label] = PRIO_BADGE[a.priority] || PRIO_BADGE.low;
+        return `<div class="adv-action" title="${esc(a.why)}"><span class="due-badge ${cls}">${label}</span>
+          <span class="txt">${esc(a.action)}</span><span class="why">${esc(a.why)}</span></div>`;
+      }).join('')}
+      ${deepAdvice[p.box_path] ? `<div class="adv-deep">${esc(deepAdvice[p.box_path])}</div>` : ''}
+    </div>`).join('') + (props.length > 8
+      ? `<div id="actions-more">${adviceExpanded ? 'show fewer' : `show all ${props.length} engagements`}</div>` : '');
+  box.querySelectorAll('.adv-prop').forEach(el => {
+    const path = el.dataset.path;
+    el.querySelector('.nm').onclick = () => {
+      expandedPath = path; render();
+      const row = document.querySelector(`select[data-path="${CSS.escape(path)}"]`);
+      if (row) row.closest('tr').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    el.querySelector('.deep').onclick = async e => {
+      e.target.disabled = true; e.target.textContent = 'thinking…';
+      try {
+        const r = await api('/api/advice/deep', { method: 'POST',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ box_path: path }) });
+        deepAdvice[path] = r.text;
+      } catch (err) { alert('Advice failed: ' + err.message); }
+      renderActions();
+    };
+  });
+  const more = $('actions-more');
+  if (more) more.onclick = () => { adviceExpanded = !adviceExpanded; renderActions(); };
+}
+
+/* ---------- what's missing ---------- */
+let gapsExpanded = false;
+function renderMissing(rows) {
+  const itemLabel = Object.fromEntries(DATA.items.map(i => [i.key, i.label]));
+  const counts = {};
+  const gaps = rows.filter(r => (r.missing || []).length);
+  gaps.forEach(r => r.missing.forEach(k => counts[k] = (counts[k] || 0) + 1));
+  const items = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    .map(([k, v]) => ({ label: itemLabel[k] || k, value: v, color: cssVar('--seq-4'),
+                        pct: Math.round(100 * v / Math.max(1, gaps.length)) }));
+  const chart = $('chart-missing');
+  if (!items.length) {
+    chart.innerHTML = '<div id="deadlines-empty">Nothing missing in the current filter 🎉</div>';
+  } else {
+    chart.innerHTML = `<div class="chart-sub">most commonly missing (${gaps.length} of ${rows.length} properties have gaps)</div>`;
+    const holder = document.createElement('div');
+    chart.appendChild(holder);
+    barChart(holder, items);
+  }
+  const list = $('gaps-list');
+  const sorted = [...gaps].sort((a, b) => b.missing.length - a.missing.length || a.name.localeCompare(b.name));
+  const shown = gapsExpanded ? sorted : sorted.slice(0, 8);
+  list.innerHTML = shown.map(r => `<div class="gap-row">
+      <span class="gap-prop" data-path="${esc(r.box_path)}" title="${esc(r.name)} — ${stageLabel(r.stage_idx)}">${esc(r.name)}</span>
+      <span class="gap-items">${r.missing.map(k => `<span class="gap-chip">${esc(itemLabel[k] || k)}</span>`).join('')}</span>
+    </div>`).join('') + (sorted.length > 8
+      ? `<div id="gaps-more">${gapsExpanded ? 'show fewer' : `show all ${sorted.length}`}</div>` : '');
+  list.querySelectorAll('.gap-prop').forEach(el => el.onclick = () => {
+    expandedPath = el.dataset.path; render();
+    const row = document.querySelector(`select[data-path="${CSS.escape(el.dataset.path)}"]`);
+    if (row) row.closest('tr').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  const more = $('gaps-more');
+  if (more) more.onclick = () => { gapsExpanded = !gapsExpanded; render(); };
+}
+
+/* ---------- tiles ---------- */
+function renderTiles(rows) {
+  const total = rows.length;
+  const active = rows.filter(r => r.stage_idx > 0).length;
+  const contract = rows.filter(r => r.stage_idx >= 4).length; // PSA or later
+  const closing = rows.filter(r => r.stage_idx >= 6).length;
+  $('tiles').innerHTML = [
+    ['Properties', total, 'in current filter'],
+    ['With activity', active, 'any pipeline evidence'],
+    ['Under contract', contract, 'PSA stage or later'],
+    ['At closing', closing, 'closing docs present'],
+  ].map(([l, v, h]) =>
+    `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="hint">${h}</div></div>`
+  ).join('');
+}
+
+/* ---------- charts (inline SVG bars) ---------- */
+const tip = $('tooltip');
+function showTip(e, html) {
+  tip.innerHTML = html; tip.style.display = 'block';
+  const x = Math.min(e.clientX + 12, window.innerWidth - tip.offsetWidth - 8);
+  tip.style.left = x + 'px'; tip.style.top = (e.clientY + 12) + 'px';
+}
+function hideTip() { tip.style.display = 'none'; }
+
+function barChart(el, items) {
+  // items: [{label, value, color, pct}]
+  const W = 520, H = 46 + items.length * 34, padL = 150, padR = 60;
+  const max = Math.max(1, ...items.map(i => i.value));
+  const plotW = W - padL - padR;
+  const ink = cssVar('--text'), muted = cssVar('--muted'), lineC = cssVar('--line');
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  // hairline gridlines at 0/50/100%
+  for (const f of [0, .5, 1]) {
+    const x = padL + plotW * f;
+    svg += `<line x1="${x}" y1="14" x2="${x}" y2="${H - 24}" stroke="${lineC}" stroke-width="1"/>`;
+    svg += `<text x="${x}" y="${H - 8}" font-size="10" fill="${muted}" text-anchor="middle">${Math.round(max * f)}</text>`;
+  }
+  items.forEach((it, i) => {
+    const y = 20 + i * 34;
+    const w = Math.max(it.value > 0 ? 3 : 0, plotW * it.value / max);
+    svg += `<text x="${padL - 8}" y="${y + 12}" font-size="12" fill="${ink}" text-anchor="end">${esc(it.label)}</text>`;
+    // 4px rounded data end, square base at the baseline (path with rounded right corners)
+    if (w > 0) {
+      const r = Math.min(4, w);
+      svg += `<path d="M${padL},${y} h${w - r} a${r},${r} 0 0 1 ${r},${r} v${18 - 2 * r} a${r},${r} 0 0 1 -${r},${r} h-${w - r} z"
+        fill="${it.color}" class="bar" data-i="${i}"/>`;
+    }
+    svg += `<text x="${padL + w + 6}" y="${y + 13}" font-size="11" fill="${muted}">${it.value}</text>`;
+    // invisible full-width hover target (bigger than the mark)
+    svg += `<rect x="0" y="${y - 7}" width="${W}" height="32" fill="transparent" class="hit" data-i="${i}"/>`;
+  });
+  svg += '</svg>';
+  el.innerHTML = svg;
+  el.querySelectorAll('.hit').forEach(h => {
+    const it = items[+h.dataset.i];
+    h.addEventListener('mousemove', e => showTip(e,
+      `<span class="t-label">${esc(it.label)}</span><br><span class="t-value">${it.value}</span> ${it.value === 1 ? 'property' : 'properties'} · ${it.pct}%`));
+    h.addEventListener('mouseleave', hideTip);
+  });
+}
+
+function renderCharts(rows) {
+  const n = Math.max(1, rows.length);
+  // stage chart: ordinal single-hue ramp (deal funnel), "Not started" in neutral
+  const seq = [1, 2, 3, 4, 5, 6].map(i => cssVar(`--seq-${i}`));
+  const stageItems = [{ label: 'Not started', value: rows.filter(r => r.stage_idx === 0).length,
+                        color: cssVar('--neutral-bar'), pct: 0 }]
+    .concat(DATA.stages.map((s, i) => ({
+      label: s.label, value: rows.filter(r => r.stage_idx === i + 1).length, color: seq[i], pct: 0 })));
+  stageItems.forEach(it => it.pct = Math.round(100 * it.value / n));
+  barChart($('chart-stage'), stageItems);
+
+  // category chart: fixed categorical slots (color follows the entity, never rank)
+  const catItems = CAT_ORDER.map(c => ({
+    label: c, value: rows.filter(r => r.category === c).length,
+    color: cssVar(catVar(c)), pct: 0 }));
+  catItems.forEach(it => it.pct = Math.round(100 * it.value / n));
+  barChart($('chart-category'), catItems);
+}
+
+/* ---------- deadlines ---------- */
+function badgeFor(days) {
+  if (days < 0) return ['b-critical', `⚠ ${-days}d overdue`];
+  if (days <= 7) return ['b-serious', `⏰ in ${days}d`];
+  if (days <= 14) return ['b-warn', `◔ in ${days}d`];
+  return ['b-good', `✓ in ${days}d`];
+}
+
+function renderDeadlines(rows) {
+  const visible = new Set(rows.map(r => r.box_path));
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const fieldLabel = Object.fromEntries(DATES.fields.map(f => [f.key, f.label]));
+  const entries = [];
+  for (const [path, d] of Object.entries(DATES.properties)) {
+    if (!visible.has(path) || d.error || d.skipped) continue;
+    for (const f of DATES.fields) {
+      const v = d[f.key];
+      if (!v) continue;
+      const dt = new Date(v + 'T00:00:00');
+      if (isNaN(dt)) continue;
+      const days = Math.round((dt - today) / 86400000);
+      if (days <= 90) entries.push({ date: v, days, what: fieldLabel[f.key], prop: d.name || path.split('\\').pop(), notes: d.notes });
+    }
+  }
+  entries.sort((a, b) => a.date < b.date ? -1 : 1);
+  const box = $('deadlines');
+  if (!entries.length) {
+    const n = Object.keys(DATES.properties).length;
+    box.innerHTML = `<div id="deadlines-empty">${n ? 'No deadlines in the next 90 days for the current filter.'
+      : 'No dates extracted yet — click “📅 Extract dates” to have Claude read each active deal’s LOI/PSA/estoppel.'}</div>`;
+    return;
+  }
+  const shown = entries.slice(0, 12);
+  box.innerHTML = shown.map(e => {
+    const [cls, label] = badgeFor(e.days);
+    return `<div class="due-row">
+      <span class="due-date">${e.date}</span>
+      <span class="due-badge ${cls}">${label}</span>
+      <span class="due-what">${esc(e.what)}</span>
+      <span class="due-prop" title="${esc(e.notes || '')}">${esc(e.prop)}</span></div>`;
+  }).join('') + (entries.length > 12
+    ? `<div id="deadlines-empty">…and ${entries.length - 12} more</div>` : '');
+}
+
+/* ---------- checklist detail ---------- */
+function detailHtml(r) {
+  const byStage = {};
+  DATA.items.forEach(it => (byStage[it.stage] = byStage[it.stage] || []).push(it));
+  let checklist = '';
+  DATA.stages.forEach((s, i) => {
+    const reached = i + 1 <= r.stage_idx;
+    checklist += `<div class="chk-stage">${esc(s.label)}${reached ? '' : ' (not yet expected)'}</div>`;
+    for (const it of byStage[s.key] || []) {
+      const files = (r.items_found || {})[it.key];
+      if (files) {
+        checklist += `<div class="chk"><span class="ok">✓</span> ${esc(it.label)}
+          <span class="file" title="${esc(files.join('\n'))}">— ${esc(files[0])}${files.length > 1 ? ` (+${files.length - 1})` : ''}</span></div>`;
+      } else if (reached) {
+        checklist += `<div class="chk"><span class="miss">✗ missing</span> ${esc(it.label)}</div>`;
+      } else {
+        checklist += `<div class="chk"><span class="future">·</span> <span class="future">${esc(it.label)}</span></div>`;
+      }
+    }
+  });
+  const d = DATES.properties[r.box_path];
+  let datesHtml;
+  if (!d) datesHtml = '<div class="date-line" style="color:var(--muted)">No dates extracted yet (needs LOI stage or later — run “📅 Extract dates”).</div>';
+  else if (d.error) datesHtml = `<div class="date-line" style="color:var(--err)">Extraction failed: ${esc(d.error)}</div>`;
+  else if (d.skipped) datesHtml = `<div class="date-line" style="color:var(--muted)">Skipped: ${esc(d.skipped)}</div>`;
+  else {
+    datesHtml = DATES.fields.map(f =>
+      `<div class="date-line"><span class="k">${esc(f.label)}</span>${d[f.key] || '<span style="color:var(--muted)">—</span>'}</div>`).join('');
+    if (d.estoppel_days) datesHtml += `<div class="date-line"><span class="k">Estoppel window</span>${d.estoppel_days} days</div>`;
+    if (d.notice_days) datesHtml += `<div class="date-line"><span class="k">Notice window</span>${d.notice_days} days</div>`;
+    if (d.notes) datesHtml += `<div class="date-line" style="color:var(--secondary)">${esc(d.notes)}</div>`;
+    if (d.source_files) datesHtml += `<div class="date-line" style="color:var(--muted)">from: ${esc(d.source_files.join(', '))}</div>`;
+  }
+  return `<div class="detail-grid">
+    <div><h4>Deal Timeline checklist</h4>${checklist}</div>
+    <div><h4>Critical dates</h4>${datesHtml}</div></div>`;
+}
+
+/* ---------- table ---------- */
+function renderTable(rows) {
+  const sorted = [...rows].sort((a, b) => {
+    let va = a[sortKey], vb = b[sortKey];
+    if (typeof va === 'string') { va = (va || '').toLowerCase(); vb = (vb || '').toLowerCase(); }
+    return (va < vb ? -1 : va > vb ? 1 : 0) * sortDir;
+  });
+  const body = $('rows');
+  body.innerHTML = '';
+  $('empty').hidden = sorted.length > 0;
+  const itemLabel = Object.fromEntries(DATA.items.map(i => [i.key, i.label]));
+  for (const r of sorted) {
+    const tr = document.createElement('tr');
+    const found = Object.entries(r.items_found || {});
+    const evChips = found.slice(0, 4).map(([k, files]) =>
+      `<span class="ev-chip" title="${esc(files.join('\n'))}">${esc(itemLabel[k] || k)} · ${files.length}</span>`
+    ).join('') + (found.length > 4 ? `<span class="ev-chip">+${found.length - 4}</span>` : '');
+    const missing = r.missing || [];
+    const missHtml = missing.length
+      ? `<span class="miss-chip" title="${esc(missing.map(k => itemLabel[k] || k).join('\n'))}">${missing.length} missing</span>`
+      : (r.stage_idx > 0 ? '<span class="due-badge b-good">✓ complete</span>' : '<span style="color:var(--muted)">—</span>');
+    const opts = ['<option value="">auto</option>'].concat(
+      DATA.stages.map(s =>
+        `<option value="${s.key}" ${r.override === s.key ? 'selected' : ''}>${s.label}</option>`)).join('');
+    const last = r.last_activity ? r.last_activity.slice(0, 10) : '—';
+    tr.innerHTML = `
+      <td class="name-cell" title="${esc(r.box_path)} — click for checklist">${expandedPath === r.box_path ? '▾ ' : '▸ '}${esc(r.name)}${r.error ? ' ⚠️' : ''}</td>
+      <td><span class="cat-dot" style="background:var(${catVar(r.category)})"></span>${esc(r.category)}</td>
+      <td><span class="stage-pill">${stageLabel(r.stage_idx)}</span>
+          <select data-path="${esc(r.box_path)}">${opts}</select>
+          ${r.override ? '<span class="override-mark" title="manually set">manual</span>' : ''}</td>
+      <td>${evChips || '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${missHtml}</td>
+      <td class="num">${r.n_files}</td>
+      <td>${last}</td>`;
+    tr.querySelector('select').onchange = async e => {
+      await api('/api/status/override', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ box_path: r.box_path, stage: e.target.value || null }),
+      });
+      await load(false);
+    };
+    tr.querySelector('.name-cell').onclick = () => {
+      expandedPath = expandedPath === r.box_path ? null : r.box_path;
+      render();
+    };
+    body.appendChild(tr);
+    if (expandedPath === r.box_path) {
+      const dr = document.createElement('tr');
+      dr.className = 'detail-row';
+      dr.innerHTML = `<td colspan="7">${detailHtml(r)}</td>`;
+      body.appendChild(dr);
+    }
+  }
+}
+
+document.querySelectorAll('th[data-k]').forEach(th => th.onclick = () => {
+  const k = th.dataset.k;
+  if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = k === 'name' ? 1 : -1; }
+  render();
+});
+
+/* ---------- assemble ---------- */
+function render() {
+  if (!DATA.properties) return;
+  const rows = filtered();
+  renderTiles(rows);
+  renderDeadlines(rows);
+  renderActions();
+  renderMissing(rows);
+  renderCharts(rows);
+  renderTable(rows);
+}
+
+async function load(showEmptyHint = true) {
+  [DATA, DATES] = await Promise.all([api('/api/status'), api('/api/dates')]);
+  // filter options (once)
+  if ($('f-stage').options.length === 1) {
+    $('f-stage').insertAdjacentHTML('beforeend', '<option value="0">Not started</option>' +
+      DATA.stages.map((s, i) => `<option value="${i + 1}">${s.label}</option>`).join(''));
+    CAT_ORDER.forEach(c => $('f-category').insertAdjacentHTML('beforeend',
+      `<option>${c}</option>`));
+  }
+  $('scan-meta').textContent = DATA.scanned_at
+    ? `${DATA.properties.length} properties · scanned ${new Date(DATA.scanned_at * 1000).toLocaleString()}`
+    : 'never scanned — click "Scan now" to check every property folder';
+  render();
+  loadMail();
+  loadAdvice();
+  if (showEmptyHint && !DATA.properties.length && DATA.scanned_at === null) startScan();
+}
+
+/* ---------- background jobs (scan / extract dates) ---------- */
+const PHASE_WORDS = { scan: 'scanning', 'extract-dates': 'extracting dates', queued: 'queued' };
+async function runJob(url, btn, verb) {
+  btn.disabled = true;
+  try {
+    const { job_id } = await api(url, { method: 'POST' });
+    const p = $('scan-progress'); p.style.display = 'inline';
+    const timer = setInterval(async () => {
+      let job;
+      try { job = await api('/api/jobs/' + job_id); } catch { clearInterval(timer); return; }
+      p.textContent = job.total
+        ? `${PHASE_WORDS[job.phase] || job.phase} ${job.done}/${job.total} — ${job.current_file || ''}`
+        : (PHASE_WORDS[job.phase] || job.phase);
+      if (job.phase === 'done' || job.phase === 'error') {
+        clearInterval(timer);
+        p.textContent = job.phase === 'error' ? (verb + ' failed: ' + job.error) : (job.message || 'done');
+        btn.disabled = false;
+        await load(false);
+        setTimeout(() => { p.style.display = 'none'; }, 8000);
+      } else if (job.done && job.done % 5 === 0) {
+        load(false); // checkpointed results — refresh incrementally
+      }
+    }, 1000);
+  } catch (e) {
+    btn.disabled = false;
+    alert(verb + ' failed to start: ' + e.message);
+  }
+}
+const startScan = () => runJob('/api/status/scan', $('scan-btn'), 'Scan');
+$('scan-btn').onclick = startScan;
+$('dates-btn').onclick = () => runJob('/api/dates/extract', $('dates-btn'), 'Date extraction');
+
+['f-category', 'f-stage', 'f-gaps'].forEach(id => $(id).onchange = render);
+$('f-search').addEventListener('input', render);
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+applyTheme(store.get('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+load();
+</script>
+</body>
+</html>

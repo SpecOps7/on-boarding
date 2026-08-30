@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Box Q&A</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --border: #e2e5ea; --text: #1c2330;
+    --muted: #68717f; --accent: #2563eb; --accent-soft: #eff4ff;
+    --chip: #f1f3f6; --ok: #16a34a; --warn: #b45309; --err: #dc2626;
+    --line: #f0f2f5; --hover: #fafbfd; --panel-soft: #fbfcfe;
+    --user-border: #d5e2fb; --overlay: rgba(15, 23, 42, .45);
+    color-scheme: light;
+  }
+  html[data-theme="dark"] {
+    --bg: #0f1420; --panel: #171d2b; --border: #2b3345; --text: #e5e9f0;
+    --muted: #8b94a5; --accent: #4f8df9; --accent-soft: #1c2a47;
+    --chip: #232b3c; --ok: #34d399; --warn: #fbbf24; --err: #f87171;
+    --line: #202839; --hover: #1c2333; --panel-soft: #141a28;
+    --user-border: #2c4270; --overlay: rgba(0, 0, 0, .55);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    padding: 10px 18px; background: var(--panel); border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  header h1 { font-size: 16px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  main { flex: 1; display: flex; min-height: 0; }
+
+  /* left pane */
+  #left {
+    width: 380px; min-width: 220px; flex: 0 0 auto;
+    background: var(--panel); display: flex; flex-direction: column; min-height: 0;
+  }
+  /* drag handles */
+  #v-resizer {
+    flex: 0 0 6px; cursor: col-resize; background: var(--border);
+    border-left: 1px solid var(--border); transition: background .15s;
+  }
+  #v-resizer:hover, #v-resizer.dragging { background: var(--accent); }
+  #h-resizer {
+    flex: 0 0 6px; cursor: row-resize; background: var(--border); transition: background .15s;
+  }
+  #h-resizer:hover, #h-resizer.dragging { background: var(--accent); }
+  body.dragging-col { cursor: col-resize; user-select: none; }
+  body.dragging-row { cursor: row-resize; user-select: none; }
+  .pane-title {
+    padding: 10px 14px 6px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  }
+  #browser { flex: 1.2; overflow-y: auto; min-height: 60px; }
+  #indexed { flex: 1; overflow-y: auto; min-height: 60px; }
+  .searchbar { padding: 4px 14px 8px; }
+  .searchbar input {
+    width: 100%; border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; font: inherit; font-size: 13px; outline: none;
+    background: var(--bg); color: var(--text);
+  }
+  .searchbar input:focus { border-color: var(--accent); background: var(--panel); }
+  .crumbs { padding: 4px 14px; font-size: 12px; color: var(--muted); word-break: break-all; }
+  .crumbs a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+    border-bottom: 1px solid var(--line); cursor: default;
+  }
+  .row:hover { background: var(--hover); }
+  .row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .name.dir { cursor: pointer; color: var(--text); font-weight: 500; }
+  .row .name.dir:hover { color: var(--accent); }
+  .row .meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .row button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--accent);
+    border-radius: 6px; padding: 2px 8px; font-size: 11px; cursor: pointer;
+  }
+  .row button:hover { background: var(--accent-soft); }
+  .folder-item { padding: 8px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .folder-item:hover { background: var(--hover); }
+  .folder-item.active { background: var(--accent-soft); }
+  .folder-item .fname { font-weight: 600; }
+  .folder-item .fmeta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .badge {
+    display: inline-block; padding: 0 6px; border-radius: 8px; font-size: 10px;
+    background: var(--chip); color: var(--muted); margin-right: 4px;
+  }
+  .badge.ok { color: var(--ok); } .badge.warn { color: var(--warn); }
+
+  #progress {
+    padding: 8px 14px; border-top: 1px solid var(--border); background: var(--panel-soft);
+    font-size: 12px; display: none;
+  }
+  #progress .bar { height: 6px; background: var(--chip); border-radius: 3px; margin: 5px 0; overflow: hidden; }
+  #progress .fill { height: 100%; background: var(--accent); width: 0%; transition: width .3s; }
+  #progress .file { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #progress.error { color: var(--err); }
+
+  /* right pane */
+  #right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #chat-header {
+    padding: 10px 18px; border-bottom: 1px solid var(--border); background: var(--panel);
+    display: flex; align-items: center; gap: 10px;
+  }
+  #chat-title { font-weight: 600; }
+  #chat-sub { font-size: 12px; color: var(--muted); flex: 1; }
+  #chat-header button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+    border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer;
+  }
+  #messages { flex: 1; overflow-y: auto; padding: 18px; min-height: 0; }
+  .msg { max-width: 780px; margin: 0 auto 14px; }
+  .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .msg .bubble {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; white-space: pre-wrap; word-wrap: break-word;
+  }
+  .msg.user .bubble { background: var(--accent-soft); border-color: var(--user-border); }
+  .msg .sources { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    background: var(--chip); border-radius: 10px; padding: 1px 9px;
+    font-size: 11px; color: var(--muted);
+  }
+  .msg.error .bubble { border-color: var(--err); color: var(--err); }
+  #empty-hint { color: var(--muted); text-align: center; margin-top: 80px; }
+
+  #composer {
+    padding: 12px 18px; border-top: 1px solid var(--border); background: var(--panel);
+    display: flex; gap: 10px; align-items: flex-end;
+  }
+  #composer textarea {
+    flex: 1; resize: none; border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; font: inherit; min-height: 40px; max-height: 140px; outline: none;
+  }
+  #composer textarea:focus { border-color: var(--accent); }
+  #composer button {
+    background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+    padding: 9px 18px; font: inherit; cursor: pointer;
+  }
+  #composer button:disabled { opacity: .5; cursor: default; }
+  /* header buttons */
+  header .sub { flex: 1; }
+  header button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+    border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+  }
+  header button:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* settings modal */
+  #settings-overlay {
+    position: fixed; inset: 0; background: var(--overlay); z-index: 50;
+    display: none; align-items: center; justify-content: center;
+  }
+  #settings-overlay.open { display: flex; }
+  #settings-modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    width: 600px; max-width: 92vw; max-height: 82vh; padding: 18px;
+    display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.3);
+  }
+  #settings-modal h2 { margin: 0 0 4px; font-size: 16px; }
+  #settings-modal .hint { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+  #settings-modal .searchbar { padding: 0 0 8px; }
+  #settings-list {
+    flex: 1; overflow-y: auto; min-height: 220px;
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  .settings-row {
+    display: flex; align-items: center; gap: 9px; padding: 7px 12px;
+    border-bottom: 1px solid var(--line); cursor: pointer;
+  }
+  .settings-row:hover { background: var(--hover); }
+  .settings-row input { accent-color: var(--accent); }
+  .settings-row .sname {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .settings-row .sub-path { color: var(--muted); font-size: 11px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  .modal-actions button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 8px; padding: 7px 14px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .modal-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .modal-actions button:hover { border-color: var(--accent); }
+
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+    vertical-align: -2px; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Box Q&amp;A</h1>
+  <span class="sub" id="root-label">connecting to Box…</span>
+  <button id="dashboard-btn" title="Deal pipeline dashboard" onclick="location.href='/dashboard'">📊 Dashboard</button>
+  <button id="settings-btn" title="Pick which Box folders to index">⚙ Settings</button>
+  <button id="theme-btn" title="Toggle dark / light mode">🌙</button>
+</header>
+<div id="settings-overlay">
+  <div id="settings-modal">
+    <h2>Index settings</h2>
+    <p class="hint">Tick the Box folders to make askable. "Save &amp; index now" copies their files out of
+      Box and (re)builds their indexes — you can keep using the app while it runs. Subfolders indexed
+      from the browser also show up here.</p>
+    <div class="searchbar"><input id="settings-search" type="search" placeholder="Filter folders…"></div>
+    <div id="settings-list"></div>
+    <div class="modal-actions">
+      <button id="settings-cancel">Cancel</button>
+      <button id="settings-save">Save</button>
+      <button id="settings-save-index" class="primary">Save &amp; index now</button>
+    </div>
+  </div>
+</div>
+<main>
+  <div id="left">
+    <div class="pane-title">Box Drive</div>
+    <div class="crumbs" id="crumbs"></div>
+    <div class="searchbar"><input id="search" type="search" placeholder="Search this folder… (type to filter)"></div>
+    <div id="browser"></div>
+    <div id="h-resizer" title="Drag to resize · double-click to reset"></div>
+    <div class="pane-title" title="Folders whose files have been copied out of Box and made searchable — select one to chat about it">Indexed folders <span style="font-weight:400;text-transform:none;letter-spacing:0">— ready to ask questions</span></div>
+    <div id="indexed"></div>
+    <div id="progress">
+      <div id="progress-label"></div>
+      <div class="bar"><div class="fill" id="progress-fill"></div></div>
+      <div class="file" id="progress-file"></div>
+    </div>
+  </div>
+  <div id="v-resizer" title="Drag to resize · double-click to reset"></div>
+  <div id="right">
+    <div id="chat-header">
+      <span id="chat-title">No folder selected</span>
+      <span id="chat-sub">Index a Box folder on the left, then select it to ask questions.</span>
+      <button id="clear-btn" hidden>Clear chat</button>
+    </div>
+    <div id="messages"><div id="empty-hint">Pick an indexed folder to start asking questions.</div></div>
+    <div id="composer">
+      <textarea id="question" placeholder="Ask about the selected folder…" disabled></textarea>
+      <button id="send" disabled>Ask</button>
+    </div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const api = async (url, opts) => {
+  const r = await fetch(url, opts);
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return r.json();
+};
+
+let boxRoot = '';
+let currentPath = '';
+let dirItems = [];            // unfiltered listing of the current directory
+let selected = null;          // {slug, name}
+const chats = {};             // slug -> [{who, text, sources, error}]
+
+const store = {
+  get(k) { try { return localStorage.getItem('boxqa.' + k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem('boxqa.' + k, v); } catch {} },
+  del(k) { try { localStorage.removeItem('boxqa.' + k); } catch {} },
+};
+
+/* ---------- Box browser ---------- */
+async function loadDir(path) {
+  $('browser').innerHTML = '<div class="row"><span class="meta"><span class="spinner"></span>listing…</span></div>';
+  try {
+    let items;
+    if (!path) {
+      const d = await api('/api/box/roots');
+      boxRoot = d.root; items = d.items;
+      $('root-label').textContent = boxRoot;
+    } else {
+      items = (await api('/api/box/children?path=' + encodeURIComponent(path))).items;
+    }
+    currentPath = path || boxRoot;
+    dirItems = items;
+    $('search').value = '';
+    renderCrumbs();
+    renderDir();
+  } catch (e) {
+    $('browser').innerHTML = `<div class="row"><span class="meta" style="color:var(--err)">${e.message}</span></div>`;
+  }
+}
+
+function renderCrumbs() {
+  const rel = currentPath.slice(boxRoot.length).replace(/^\\+/, '');
+  const parts = rel ? rel.split('\\') : [];
+  let html = `<a data-i="-1">Box</a>`;
+  parts.forEach((p, i) => { html += ` \\ <a data-i="${i}">${escapeHtml(p)}</a>`; });
+  $('crumbs').innerHTML = html;
+  $('crumbs').querySelectorAll('a').forEach(a => a.onclick = () => {
+    const i = +a.dataset.i;
+    loadDir(i < 0 ? '' : boxRoot + '\\' + parts.slice(0, i + 1).join('\\'));
+  });
+}
+
+function renderDir() {
+  const box = $('browser');
+  const q = $('search').value.trim().toLowerCase();
+  const items = q ? dirItems.filter(it => it.name.toLowerCase().includes(q)) : dirItems;
+  box.innerHTML = '';
+  if (!items.length) {
+    box.innerHTML = `<div class="row"><span class="meta">${q ? 'no matches for "' + escapeHtml(q) + '"' : 'empty folder'}</span></div>`;
+  }
+  for (const it of items) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const full = currentPath + '\\' + it.name;
+    if (it.is_dir) {
+      row.innerHTML = `<span class="name dir" title="${escapeHtml(it.name)}">📁 ${escapeHtml(it.name)}</span><button title="Copy this folder out of Box and make it searchable">Index</button>`;
+      row.querySelector('.name').onclick = () => loadDir(full);
+      row.querySelector('button').onclick = () => startIndex(full, it.name);
+    } else {
+      row.innerHTML = `<span class="name" title="${escapeHtml(it.name)}">${escapeHtml(it.name)}</span><span class="meta">${fmtSize(it.size)}</span>`;
+    }
+    box.appendChild(row);
+  }
+}
+
+$('search').addEventListener('input', renderDir);
+
+/* ---------- Indexing jobs ---------- */
+async function startIndex(boxPath, name) {
+  try {
+    const { job_id } = await api('/api/index', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ box_path: boxPath }),
+    });
+    pollJob(job_id, name);
+  } catch (e) { alert('Index failed to start: ' + e.message); }
+}
+
+function pollJob(jobId, name) {
+  const p = $('progress');
+  p.style.display = 'block'; p.classList.remove('error');
+  const timer = setInterval(async () => {
+    let job;
+    try { job = await api('/api/jobs/' + jobId); }
+    catch { clearInterval(timer); p.style.display = 'none'; return; }
+    const phase = { queued: 'Queued', sync: 'Copying from Box', extract: 'Indexing' }[job.phase] || job.phase;
+    const note = job.note ? ` ${escapeHtml(job.note)}` : '';
+    $('progress-label').innerHTML = `<span class="spinner"></span><b>${escapeHtml(name)}</b>${note} — ${phase}` +
+      (job.total ? ` (${job.done}/${job.total})` : '');
+    $('progress-fill').style.width = job.total ? (100 * job.done / job.total) + '%' : '0%';
+    $('progress-file').textContent = job.current_file || '';
+    if (job.phase === 'done' || job.phase === 'error') {
+      clearInterval(timer);
+      if (job.phase === 'error') {
+        p.classList.add('error');
+        $('progress-label').textContent = `${name}: ${job.error}`;
+        $('progress-file').textContent = '';
+      } else {
+        $('progress-label').innerHTML = `<b>${escapeHtml(name)}</b> — done. ${escapeHtml(job.message || '')}`;
+        $('progress-fill').style.width = '100%';
+        $('progress-file').textContent = '';
+        setTimeout(() => { p.style.display = 'none'; }, 6000);
+      }
+      loadFolders();
+    }
+  }, 1000);
+}
+
+/* ---------- Indexed folders ---------- */
+async function loadFolders() {
+  const { folders } = await api('/api/folders');
+  const box = $('indexed');
+  box.innerHTML = folders.length ? '' : '<div class="row"><span class="meta">nothing indexed yet</span></div>';
+  for (const f of folders) {
+    const div = document.createElement('div');
+    div.className = 'folder-item' + (selected && selected.slug === f.slug ? ' active' : '');
+    const s = f.by_status || {};
+    div.innerHTML = `<div class="fname" title="${escapeHtml(f.box_path)}">${escapeHtml(f.name)}</div>
+      <div class="fmeta">
+        <span class="badge ok">${s.indexed || 0} indexed</span>
+        ${s.attachable ? `<span class="badge">${s.attachable} image/scan</span>` : ''}
+        ${s.unsupported_legacy ? `<span class="badge warn">${s.unsupported_legacy} legacy</span>` : ''}
+        ${s.error ? `<span class="badge warn">${s.error} errors</span>` : ''}
+        · ${f.chunks} chunks
+      </div>`;
+    div.onclick = () => selectFolder(f);
+    box.appendChild(div);
+  }
+}
+
+function selectFolder(f) {
+  selected = f;
+  $('chat-title').textContent = f.name;
+  $('chat-sub').textContent = `${f.files} files · ${f.chunks} chunks`;
+  $('clear-btn').hidden = false;
+  $('question').disabled = false;
+  $('send').disabled = false;
+  loadFolders();
+  renderChat();
+  $('question').focus();
+}
+
+/* ---------- Chat ---------- */
+function renderChat() {
+  const box = $('messages');
+  box.innerHTML = '';
+  const msgs = chats[selected.slug] || [];
+  if (!msgs.length) {
+    box.innerHTML = '<div id="empty-hint">Ask anything about the files in this folder.</div>';
+    return;
+  }
+  for (const m of msgs) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + (m.who === 'you' ? 'user' : m.error ? 'error' : '');
+    let html = `<div class="who">${m.who === 'you' ? 'You' : 'Claude'}</div>
+      <div class="bubble">${m.pending ? '<span class="spinner"></span>thinking…' : escapeHtml(m.text)}</div>`;
+    if (m.sources && m.sources.length) {
+      html += '<div class="sources">' + m.sources.map(s =>
+        `<span class="chip" title="score ${s.score ?? '-'}">${escapeHtml(s.rel_path)} · ${escapeHtml(s.loc)}</span>`
+      ).join('') + '</div>';
+    }
+    div.innerHTML = html;
+    box.appendChild(div);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendQuestion() {
+  const q = $('question').value.trim();
+  if (!q || !selected) return;
+  $('question').value = '';
+  $('send').disabled = true;
+  const msgs = chats[selected.slug] = chats[selected.slug] || [];
+  msgs.push({ who: 'you', text: q });
+  const pending = { who: 'claude', text: '', pending: true };
+  msgs.push(pending);
+  renderChat();
+  try {
+    const r = await api('/api/ask', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug: selected.slug, question: q }),
+    });
+    Object.assign(pending, { text: r.answer, sources: r.sources, pending: false });
+  } catch (e) {
+    Object.assign(pending, { text: e.message, error: true, pending: false });
+  }
+  $('send').disabled = false;
+  renderChat();
+  $('question').focus();
+}
+
+$('send').onclick = sendQuestion;
+$('question').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+});
+$('clear-btn').onclick = async () => {
+  if (!selected) return;
+  chats[selected.slug] = [];
+  await api(`/api/folders/${selected.slug}/clear-history`, { method: 'POST' });
+  renderChat();
+};
+
+/* ---------- settings modal ---------- */
+const settingsState = { top: [], selected: new Set() };
+
+async function openSettings() {
+  $('settings-overlay').classList.add('open');
+  $('settings-list').innerHTML =
+    '<div class="settings-row"><span class="sname"><span class="spinner"></span>loading Box folders…</span></div>';
+  try {
+    const [roots, settings] = await Promise.all([api('/api/box/roots'), api('/api/settings')]);
+    boxRoot = roots.root;
+    settingsState.top = roots.items.filter(i => i.is_dir).map(i => boxRoot + '\\' + i.name);
+    settingsState.selected = new Set(settings.paths);
+    $('settings-search').value = '';
+    renderSettings();
+  } catch (e) {
+    $('settings-list').innerHTML =
+      `<div class="settings-row"><span class="sname" style="color:var(--err)">${escapeHtml(e.message)}</span></div>`;
+  }
+}
+
+function renderSettings() {
+  const q = $('settings-search').value.trim().toLowerCase();
+  const extras = [...settingsState.selected].filter(p => !settingsState.top.includes(p));
+  const list = $('settings-list');
+  list.innerHTML = '';
+  for (const p of [...settingsState.top, ...extras]) {
+    const name = p.slice(boxRoot.length).replace(/^\\+/, '');
+    if (q && !name.toLowerCase().includes(q)) continue;
+    const row = document.createElement('label');
+    row.className = 'settings-row';
+    const isSub = name.includes('\\');
+    row.innerHTML = `<input type="checkbox" ${settingsState.selected.has(p) ? 'checked' : ''}>
+      <span class="sname" title="${escapeHtml(p)}">📁 ${escapeHtml(name)}${isSub ? ' <span class="sub-path">(subfolder)</span>' : ''}</span>`;
+    row.querySelector('input').onchange = e => {
+      if (e.target.checked) settingsState.selected.add(p); else settingsState.selected.delete(p);
+    };
+    list.appendChild(row);
+  }
+  if (!list.children.length) {
+    list.innerHTML = '<div class="settings-row"><span class="sname" style="color:var(--muted)">no matches</span></div>';
+  }
+}
+
+async function saveSettings(andIndex) {
+  try {
+    await api('/api/settings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths: [...settingsState.selected] }),
+    });
+    $('settings-overlay').classList.remove('open');
+    if (andIndex) {
+      const { job_id } = await api('/api/index-all', { method: 'POST' });
+      pollJob(job_id, 'Selected folders');
+    }
+  } catch (e) { alert('Save failed: ' + e.message); }
+}
+
+$('settings-btn').onclick = openSettings;
+$('settings-cancel').onclick = () => $('settings-overlay').classList.remove('open');
+$('settings-save').onclick = () => saveSettings(false);
+$('settings-save-index').onclick = () => saveSettings(true);
+$('settings-search').addEventListener('input', renderSettings);
+$('settings-overlay').addEventListener('click', e => {
+  if (e.target.id === 'settings-overlay') $('settings-overlay').classList.remove('open');
+});
+
+/* ---------- dark / light mode ---------- */
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  $('theme-btn').textContent = t === 'dark' ? '☀️' : '🌙';
+}
+applyTheme(store.get('theme') ||
+  (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+$('theme-btn').onclick = () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  store.set('theme', next);
+};
+
+/* ---------- resizable panes ---------- */
+function initResizers() {
+  const left = $('left'), browser = $('browser');
+
+  const savedW = parseInt(store.get('leftW'), 10);
+  if (savedW) left.style.width = savedW + 'px';
+  const savedH = parseInt(store.get('browserH'), 10);
+  if (savedH) browser.style.flex = '0 0 ' + savedH + 'px';
+
+  function drag(handle, bodyClass, onMove, onEnd) {
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      handle.classList.add('dragging');
+      document.body.classList.add(bodyClass);
+      const move = ev => onMove(ev);
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        handle.classList.remove('dragging');
+        document.body.classList.remove(bodyClass);
+        onEnd();
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+  }
+
+  drag($('v-resizer'), 'dragging-col',
+    ev => {
+      const w = Math.min(Math.max(ev.clientX, 220), window.innerWidth * 0.75);
+      left.style.width = w + 'px';
+    },
+    () => store.set('leftW', parseInt(left.style.width, 10)));
+  $('v-resizer').addEventListener('dblclick', () => {
+    left.style.width = '380px';
+    store.del('leftW');
+  });
+
+  drag($('h-resizer'), 'dragging-row',
+    ev => {
+      const top = browser.getBoundingClientRect().top;
+      const max = left.getBoundingClientRect().bottom - top - 150;
+      const h = Math.min(Math.max(ev.clientY - top, 60), Math.max(max, 60));
+      browser.style.flex = '0 0 ' + h + 'px';
+    },
+    () => store.set('browserH', parseInt(browser.getBoundingClientRect().height, 10)));
+  $('h-resizer').addEventListener('dblclick', () => {
+    browser.style.flex = '';
+    store.del('browserH');
+  });
+}
+
+initResizers();
+
+/* ---------- utils ---------- */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function fmtSize(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
+  return (n / 1048576).toFixed(1) + ' MB';
+}
+
+loadDir('');
+loadFolders();
+</script>
+</body>
+</html>
