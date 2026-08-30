@@ -47,6 +47,10 @@ File handling: PDFs are indexed per page; fully scanned PDFs and images aren't O
 
 The **Action items** card lists what each engagement needs next, derived from its stage, missing Deal Timeline documents, critical dates, and recent email: overdue/imminent dates are critical ("DD ends in 5d — deposit goes non-refundable"), stage gaps are high/medium ("under contract, no estoppel on file"), quiet deals get a check-in nudge, and pending email proposals surface as reviews. Rules live in `app/advisor.py`. The **🧭 advise** button asks Claude for a deeper prioritized read of one engagement (cached until its state changes). Closed deals only get low-priority housekeeping.
 
+## Outreach — AI-drafted, human-approved email
+
+The **✍ draft email** buttons in Action items ask Claude to write stage-appropriate outreach for an engagement — it picks the right recipient from the deal's actual email contacts (derived from matched threads), replies inside an existing thread when that's the natural place, and cites real documents and dates. Drafts land in the **Outreach drafts** card where every field (To/Cc/Subject/Body) is editable; **nothing sends until you click Approve & send** (confirm dialog shows the recipient), or choose **Save to Outlook Drafts** to send from Outlook yourself, or Discard. Sending goes through classic Outlook COM — no API — from your own account, threaded into the conversation. History is kept in `.cache/outlook/outreach.json`.
+
 ## Outlook hook (no API) — email → workflow with go/no-go approval
 
 The dashboard's **✉ Check mail** pulls recent Inbox + Sent mail from **classic Outlook** through its local COM automation (no Graph API, no app registration), then:

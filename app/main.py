@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from . import advisor, box_bridge, dates, indexer, jobs, mail, qa, status
+from . import advisor, box_bridge, dates, indexer, jobs, mail, outreach, qa, status
 from .box_bridge import PROJECT_DIR
 
 app = FastAPI(title="Box Q&A")
@@ -321,6 +321,54 @@ async def advice_deep(req: DeepAdviceRequest):
             raise HTTPException(404, "unknown property")
         except Exception as e:  # noqa: BLE001
             raise HTTPException(502, f"advice failed: {e}")
+
+
+class DraftRequest(BaseModel):
+    box_path: str
+    action: str = ""
+    instructions: str = ""
+
+
+class OutreachDecision(BaseModel):
+    to: str | None = None
+    cc: str | None = None
+    subject: str | None = None
+    body: str | None = None
+
+
+@app.get("/api/outreach")
+def outreach_list():
+    return outreach.list_outreach()
+
+
+@app.post("/api/outreach/draft")
+async def outreach_draft(req: DraftRequest):
+    _require_in_box(req.box_path)
+    async with _ask_lock:
+        try:
+            return await asyncio.to_thread(outreach.draft, req.box_path, req.action, req.instructions)
+        except KeyError:
+            raise HTTPException(404, "unknown property")
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(502, f"drafting failed: {e}")
+
+
+@app.post("/api/outreach/{oid}/{decision}")
+def outreach_decide(oid: str, decision: str, req: OutreachDecision):
+    if decision not in ("send", "outlook_draft", "discard"):
+        raise HTTPException(400, "decision must be send | outlook_draft | discard")
+    try:
+        return outreach.decide(oid, decision, req.model_dump())
+    except KeyError:
+        raise HTTPException(404, "no such draft")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/outreach/contacts")
+def outreach_contacts(box_path: str):
+    _require_in_box(box_path)
+    return {"contacts": outreach.contacts_for(box_path)}
 
 
 @app.get("/api/mail/settings")

@@ -43,7 +43,25 @@
   header button:hover { color: var(--accent); border-color: var(--accent); }
   header button.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
 
-  main { max-width: 1200px; margin: 0 auto; padding: 18px 22px 40px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 12px 22px 40px; }
+
+  /* tabs */
+  #tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  #tabs button {
+    border: 1px solid transparent; border-bottom: none; background: none; color: var(--secondary);
+    padding: 8px 16px; font: inherit; font-size: 13px; cursor: pointer;
+    border-radius: 8px 8px 0 0; display: flex; align-items: center; gap: 6px;
+  }
+  #tabs button:hover { color: var(--accent); }
+  #tabs button.active {
+    background: var(--panel); border-color: var(--border); color: var(--text);
+    font-weight: 600; margin-bottom: -1px; padding-bottom: 9px;
+  }
+  #tabs .tab-badge {
+    background: var(--accent); color: #fff; border-radius: 9px; font-size: 10px;
+    font-weight: 600; padding: 0 6px; min-width: 17px; text-align: center;
+  }
+  #tabs .tab-badge:empty { display: none; }
 
   /* filters */
   #filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
@@ -181,6 +199,43 @@
   .um-row select { max-width: 260px; font-size: 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); }
   .mono { font-variant-numeric: tabular-nums; }
 
+  /* outreach card */
+  #outreach-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 18px;
+  }
+  #outreach-card h3 { margin: 0 0 2px; font-size: 13px; }
+  #outreach-card .chart-sub { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .or-draft {
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    margin-bottom: 8px; background: var(--bg);
+  }
+  .or-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 12px; margin-bottom: 6px; }
+  .or-head .pn { font-weight: 600; }
+  .or-head .why { color: var(--muted); flex: 1; }
+  .or-field { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+  .or-field label { width: 52px; font-size: 11px; color: var(--muted); text-align: right; }
+  .or-field input {
+    flex: 1; border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+    color: var(--text); padding: 4px 8px; font: inherit; font-size: 12px;
+  }
+  .or-draft textarea {
+    width: 100%; min-height: 120px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--panel); color: var(--text); padding: 8px 10px; font: inherit; font-size: 12px;
+    resize: vertical; margin-top: 4px;
+  }
+  .or-thread { font-size: 11px; color: var(--muted); margin: 2px 0 0 60px; }
+  .or-actions { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .or-actions button {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 6px; padding: 5px 12px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .or-actions button.send { background: var(--st-good); border-color: var(--st-good); color: #fff; }
+  .or-actions button.discard { color: var(--st-critical); }
+  .or-error { color: var(--err); font-size: 11px; }
+  .or-hist { display: flex; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+  .or-hist:last-child { border-bottom: 0; }
+
   /* action items card */
   #actions-card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
@@ -264,6 +319,12 @@
   <a href="/">← Q&amp;A app</a>
 </header>
 <main>
+  <nav id="tabs">
+    <button data-tab="pipeline">📊 Pipeline</button>
+    <button data-tab="inbox">✉ Inbox review <span class="tab-badge" id="badge-inbox"></span></button>
+    <button data-tab="outreach">✍ Outreach <span class="tab-badge" id="badge-outreach"></span></button>
+    <button data-tab="actions">🧭 Action items <span class="tab-badge" id="badge-actions"></span></button>
+  </nav>
   <div id="filters">
     <select id="f-category"><option value="">All categories</option></select>
     <select id="f-stage"><option value="">All stages</option></select>
@@ -279,6 +340,12 @@
     <details class="inbox-section" id="filed-section"><summary id="filed-summary">Filed emails</summary><div id="filed-list"></div></details>
     <details class="inbox-section" id="unmatched-section"><summary id="unmatched-summary">Unmatched emails</summary><div id="unmatched-list"></div></details>
     <details class="inbox-section" id="decided-section"><summary id="decided-summary">Decided</summary><div id="decided-list"></div></details>
+  </div>
+  <div id="outreach-card">
+    <h3>Outreach drafts</h3>
+    <div class="chart-sub">AI-drafted email to a deal's contacts — edit anything, then Send, park it in Outlook Drafts, or discard. Nothing sends without your click. Create drafts with ✍ in Action items.</div>
+    <div id="outreach-pending"></div>
+    <details class="inbox-section"><summary id="outreach-hist-summary">Sent & history</summary><div id="outreach-history"></div></details>
   </div>
   <div id="actions-card">
     <h3>Action items</h3>
@@ -345,6 +412,37 @@ $('theme-btn').onclick = () => {
   const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
   store.set('theme', next); applyTheme(next);
 };
+
+/* ---------- tabs ---------- */
+const TAB_MAP = {
+  pipeline: ['filters', 'tiles', 'deadlines-card', 'charts', 'missing-card', 'table-card'],
+  inbox: ['inbox-card'],
+  outreach: ['outreach-card'],
+  actions: ['filters', 'actions-card'],
+};
+let currentTab = 'pipeline';
+
+function switchTab(name) {
+  if (!TAB_MAP[name]) name = 'pipeline';
+  currentTab = name;
+  const show = new Set(TAB_MAP[name]);
+  Object.values(TAB_MAP).flat().forEach(id => {
+    const el = $(id);
+    if (el) el.style.display = show.has(id) ? '' : 'none';
+  });
+  document.querySelectorAll('#tabs button').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === name));
+  store.set('tab', name);
+}
+
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+
+function updateTabBadges() {
+  $('badge-inbox').textContent = (MAIL.proposals || []).length || '';
+  $('badge-outreach').textContent = (OUTREACH.pending || []).length || '';
+  const crit = (ADVICE.properties || []).filter(p => p.top_priority === 'critical' || p.top_priority === 'high').length;
+  $('badge-actions').textContent = crit || '';
+}
 
 let DATA = { stages: [], items: [], properties: [] };
 let DATES = { fields: [], properties: {} };
@@ -496,6 +594,7 @@ function renderInbox() {
       <span style="color:var(--secondary)">${esc(p.property_name)}</span>
       <span style="color:var(--muted);font-size:11px">${p.changes.filter(c => c.accepted).map(c => c.label).join(' · ')}</span>
     </div>`).join('') : '<div id="deadlines-empty">none yet</div>';
+  updateTabBadges();
 }
 
 $('mail-btn').onclick = () => runJob('/api/mail/pull', $('mail-btn'), 'Mail check').then(loadMail);
@@ -532,11 +631,13 @@ function renderActions() {
         <span class="nm" title="open checklist">${esc(p.name)}</span>
         <span class="stg">${stageLabel(p.stage_idx)}</span>
         <button class="deep">🧭 advise</button>
+        <button class="draft-general" title="Draft an outreach email for this engagement">✍ draft email</button>
       </div>
-      ${p.actions.map(a => {
+      ${p.actions.map((a, ai) => {
         const [cls, label] = PRIO_BADGE[a.priority] || PRIO_BADGE.low;
         return `<div class="adv-action" title="${esc(a.why)}"><span class="due-badge ${cls}">${label}</span>
-          <span class="txt">${esc(a.action)}</span><span class="why">${esc(a.why)}</span></div>`;
+          <span class="txt">${esc(a.action)}</span><span class="why">${esc(a.why)}</span>
+          <button class="draft-one" data-ai="${ai}" title="Draft an email for this action">✍</button></div>`;
       }).join('')}
       ${deepAdvice[p.box_path] ? `<div class="adv-deep">${esc(deepAdvice[p.box_path])}</div>` : ''}
     </div>`).join('') + (props.length > 8
@@ -544,6 +645,7 @@ function renderActions() {
   box.querySelectorAll('.adv-prop').forEach(el => {
     const path = el.dataset.path;
     el.querySelector('.nm').onclick = () => {
+      switchTab('pipeline');
       expandedPath = path; render();
       const row = document.querySelector(`select[data-path="${CSS.escape(path)}"]`);
       if (row) row.closest('tr').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -557,9 +659,85 @@ function renderActions() {
       } catch (err) { alert('Advice failed: ' + err.message); }
       renderActions();
     };
+    const prop = ADVICE.properties.find(x => x.box_path === path);
+    const makeDraft = async (btn, action) => {
+      btn.disabled = true; const was = btn.textContent; btn.textContent = 'drafting…';
+      try {
+        await api('/api/outreach/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ box_path: path, action }) });
+        await loadOutreach();
+        switchTab('outreach');
+      } catch (err) { alert('Draft failed: ' + err.message); }
+      btn.disabled = false; btn.textContent = was;
+    };
+    el.querySelector('.draft-general').onclick = e => makeDraft(e.target, '');
+    el.querySelectorAll('.draft-one').forEach(b =>
+      b.onclick = e => makeDraft(e.target, (prop.actions[+b.dataset.ai] || {}).action || ''));
   });
   const more = $('actions-more');
   if (more) more.onclick = () => { adviceExpanded = !adviceExpanded; renderActions(); };
+  updateTabBadges();
+}
+
+/* ---------- outreach (AI drafts, human-approved send) ---------- */
+let OUTREACH = { pending: [], history: [] };
+
+async function loadOutreach() {
+  try { OUTREACH = await api('/api/outreach'); } catch { OUTREACH = { pending: [], history: [] }; }
+  renderOutreach();
+}
+
+function renderOutreach() {
+  const box = $('outreach-pending');
+  if (!box) return;
+  if (!OUTREACH.pending.length) {
+    box.innerHTML = '<div id="deadlines-empty">No drafts waiting. Use ✍ next to an action item to have one written.</div>';
+  } else {
+    box.innerHTML = OUTREACH.pending.map(o => `
+      <div class="or-draft" data-id="${o.id}">
+        <div class="or-head"><span class="pn">${esc(o.property_name)}</span>
+          ${o.action ? `<span class="ev-chip">${esc(o.action.slice(0, 60))}</span>` : ''}
+          <span class="why" title="${esc(o.rationale || '')}">${esc(o.rationale || '')}</span></div>
+        <div class="or-field"><label>To</label><input class="f-to" value="${esc(o.to)}" list="contacts-${o.id}">
+          <datalist id="contacts-${o.id}">${(o.contacts || []).map(c => `<option value="${esc(c.email)}">${esc(c.name)}</option>`).join('')}</datalist></div>
+        <div class="or-field"><label>Cc</label><input class="f-cc" value="${esc(o.cc)}"></div>
+        <div class="or-field"><label>Subject</label><input class="f-subject" value="${esc(o.subject)}"></div>
+        ${o.reply_entry_id ? `<div class="or-thread">↩ will reply within the thread: “${esc(o.reply_subject || '')}” (quoted history preserved)</div>` : ''}
+        <textarea class="f-body">${esc(o.body)}</textarea>
+        <div class="or-actions">
+          <button class="send">📤 Approve &amp; send</button>
+          <button class="to-drafts" title="Save into Outlook's Drafts folder — you send it from Outlook">Save to Outlook Drafts</button>
+          <button class="discard">Discard</button>
+          <span class="or-error">${o.result && o.result.ok === false ? esc(o.result.error || '') : ''}</span>
+        </div>
+      </div>`).join('');
+    box.querySelectorAll('.or-draft').forEach(card => {
+      const id = card.dataset.id;
+      const edits = () => ({ to: card.querySelector('.f-to').value, cc: card.querySelector('.f-cc').value,
+                             subject: card.querySelector('.f-subject').value, body: card.querySelector('.f-body').value });
+      const act = async (decision, confirmMsg) => {
+        if (confirmMsg && !confirm(confirmMsg)) return;
+        try { await api(`/api/outreach/${id}/${decision}`, { method: 'POST',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(edits()) }); }
+        catch (e) { alert('Failed: ' + e.message); }
+        await loadOutreach();
+      };
+      card.querySelector('.send').onclick = () =>
+        act('send', `Send this email now to: ${card.querySelector('.f-to').value}?`);
+      card.querySelector('.to-drafts').onclick = () => act('outlook_draft');
+      card.querySelector('.discard').onclick = () => act('discard');
+    });
+  }
+  $('outreach-hist-summary').textContent = `Sent & history (${OUTREACH.history.length})`;
+  $('outreach-history').innerHTML = OUTREACH.history.length ? OUTREACH.history.map(o => `
+    <div class="or-hist">
+      <span class="due-badge ${o.status === 'sent' ? 'b-good' : o.status === 'outlook_draft' ? 'b-warn' : ''}">${
+        o.status === 'sent' ? '📤 sent' : o.status === 'outlook_draft' ? 'in Outlook Drafts' : 'discarded'}</span>
+      <span style="color:var(--secondary)">${esc(o.property_name)}</span>
+      <span class="subj" style="flex:1">${esc(o.subject)}</span>
+      <span style="color:var(--muted);font-size:11px">${esc(o.to)} · ${o.decided_at ? new Date(o.decided_at * 1000).toLocaleDateString() : ''}</span>
+    </div>`).join('') : '<div id="deadlines-empty">none yet</div>';
+  updateTabBadges();
 }
 
 /* ---------- what's missing ---------- */
@@ -590,6 +768,7 @@ function renderMissing(rows) {
     </div>`).join('') + (sorted.length > 8
       ? `<div id="gaps-more">${gapsExpanded ? 'show fewer' : `show all ${sorted.length}`}</div>` : '');
   list.querySelectorAll('.gap-prop').forEach(el => el.onclick = () => {
+    switchTab('pipeline');
     expandedPath = el.dataset.path; render();
     const row = document.querySelector(`select[data-path="${CSS.escape(el.dataset.path)}"]`);
     if (row) row.closest('tr').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -850,6 +1029,7 @@ async function load(showEmptyHint = true) {
   render();
   loadMail();
   loadAdvice();
+  loadOutreach();
   if (showEmptyHint && !DATA.properties.length && DATA.scanned_at === null) startScan();
 }
 
@@ -893,6 +1073,7 @@ function esc(s) {
 }
 
 applyTheme(store.get('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+switchTab(store.get('tab') || 'pipeline');
 load();
 </script>
 </body>
