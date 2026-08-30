@@ -22,6 +22,8 @@ Notes:
 - If `claude` was just installed by setup, run `claude` once first to log in.
 - Keep the project on a Windows drive (e.g. `/mnt/c/...`) — the PowerShell helpers and the sync cache must be visible from Windows.
 
+Every Q&A answer for a folder that maps to a tracked deal ends with a **🎯 Plan of attack** — numbered, actionable steps to move that deal to its next stage, grounded in the documents plus the pipeline tracker's stage, missing items, and critical dates. The button under it hands the plan to Claude to **draft the first outreach email**, which lands in the dashboard's ✍ Outreach tab for your approval.
+
 ## Using it
 
 1. Browse Box folders in the left pane (click a name to drill down).

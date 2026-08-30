@@ -46,15 +46,48 @@ def retrieve(slug: str, question: str) -> tuple[list[dict], list[str]]:
     return chunks, attach
 
 
-def build_prompt(slug: str, question: str, chunks: list[dict], attach: list[str]) -> str:
+def _deal_context(slug: str) -> tuple[str | None, str]:
+    """(box_path, deal-state text) for the property this folder belongs to, if any."""
+    from . import advisor, dates, indexer, status as status_mod
+    info = indexer.folder_info(slug)
+    box_path = (info or {}).get("box_path")
+    if not box_path:
+        return None, ""
+    row = next((r for r in status_mod.get_status()["properties"] if r["box_path"] == box_path), None)
+    if not row:
+        return box_path, ""
+    item_label = {i["key"]: i["label"] for i in status_mod.ITEMS}
+    d = dates._load().get(box_path, {})
+    base = next((p for p in advisor.advise()["properties"] if p["box_path"] == box_path), None)
+    lines = [
+        "\nDEAL STATE (from the pipeline tracker):",
+        f"- Stage: {status_mod.STAGES[row['stage_idx']-1]['label'] if row['stage_idx'] else 'Not started'}",
+        "- Missing checklist items: " + (", ".join(item_label.get(k, k) for k in row.get("missing") or []) or "none"),
+        "- Critical dates: " + (json.dumps({lbl: d.get(k) for k, lbl in dates.DATE_FIELDS if d.get(k)}) or "{}"),
+    ]
+    if base:
+        lines.append("- Open action items: " + "; ".join(a["action"] for a in base["actions"][:4]))
+    return box_path, "\n".join(lines)
+
+
+def build_prompt(slug: str, question: str, chunks: list[dict], attach: list[str],
+                 deal_state: str = "") -> str:
     cache_dir = CACHE_BOX_DIR / slug
     parts = [
-        "You are a document Q&A assistant for a folder of business documents.",
+        "You are a document Q&A assistant for a folder of commercial real estate deal documents.",
         "Answer the question using ONLY the numbered excerpts below (and the listed",
         "attachable files, if any). Cite every claim inline as [filename, loc] using",
         "the FILE and LOC values of the excerpts you relied on. If the excerpts do not",
         "contain the answer, say so plainly - do not guess.",
+        "",
+        "After the answer, add a section that starts with exactly 'PLAN OF ATTACK:' —",
+        "3-6 numbered, concrete steps to take this deal to its next stage and through to",
+        "completion, informed by the question, the documents, and the DEAL STATE below.",
+        "Each step: an imperative action with who to contact or what document to produce,",
+        "and a timeframe when a critical date makes one relevant. No fluff.",
     ]
+    if deal_state:
+        parts.append(deal_state)
     if attach:
         parts.append(
             "\nThese files are images/scans with no extracted text. If they look relevant "
@@ -115,13 +148,15 @@ def answer(slug: str, question: str) -> dict:
                       "(it may contain only images or unsupported files).",
             "sources": [], "elapsed": 0.0,
         }
-    prompt = build_prompt(slug, question, chunks, attach)
+    box_path, deal_state = _deal_context(slug)
+    prompt = build_prompt(slug, question, chunks, attach, deal_state)
     text = ask_claude(prompt, slug)
     _history.setdefault(slug, []).append((question, text))
     sources = [{"rel_path": c["rel_path"], "loc": c["loc"], "score": round(c["score"], 2)}
                for c in chunks]
     sources += [{"rel_path": rel, "loc": "file", "score": None} for rel in attach]
-    return {"answer": text, "sources": sources, "elapsed": round(time.monotonic() - start, 1)}
+    return {"answer": text, "sources": sources, "box_path": box_path,
+            "elapsed": round(time.monotonic() - start, 1)}
 
 
 def clear_history(slug: str) -> None:

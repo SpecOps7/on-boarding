@@ -127,6 +127,17 @@
     font-size: 11px; color: var(--muted);
   }
   .msg.error .bubble { border-color: var(--err); color: var(--err); }
+  .plan-box {
+    margin-top: 8px; border: 1px solid var(--accent); border-radius: 10px;
+    background: var(--accent-soft); padding: 10px 14px; white-space: pre-wrap;
+  }
+  .plan-box .plan-title { font-weight: 650; font-size: 12px; margin-bottom: 4px; }
+  .plan-box button {
+    margin-top: 8px; border: 1px solid var(--accent); background: var(--panel);
+    color: var(--accent); border-radius: 6px; padding: 3px 10px; font: inherit;
+    font-size: 12px; cursor: pointer; display: block;
+  }
+  .plan-box button:hover { background: var(--accent); color: #fff; }
   #empty-hint { color: var(--muted); text-align: center; margin-top: 80px; }
 
   #composer {
@@ -417,14 +428,35 @@ function renderChat() {
   for (const m of msgs) {
     const div = document.createElement('div');
     div.className = 'msg ' + (m.who === 'you' ? 'user' : m.error ? 'error' : '');
+    let answer = m.text || '', plan = '';
+    if (m.who !== 'you' && !m.error) {
+      const parts = answer.split(/\n?PLAN OF ATTACK:\s*/);
+      if (parts.length > 1) { answer = parts[0].trim(); plan = parts.slice(1).join('\n').trim(); }
+    }
     let html = `<div class="who">${m.who === 'you' ? 'You' : 'Claude'}</div>
-      <div class="bubble">${m.pending ? '<span class="spinner"></span>thinking…' : escapeHtml(m.text)}</div>`;
+      <div class="bubble">${m.pending ? '<span class="spinner"></span>thinking…' : escapeHtml(answer)}</div>`;
+    if (plan) {
+      html += `<div class="plan-box"><div class="plan-title">🎯 Plan of attack</div>${escapeHtml(plan)}
+        ${m.box_path ? '<button class="to-outreach">✍ Draft the first outreach email from this plan</button>' : ''}</div>`;
+    }
     if (m.sources && m.sources.length) {
       html += '<div class="sources">' + m.sources.map(s =>
         `<span class="chip" title="score ${s.score ?? '-'}">${escapeHtml(s.rel_path)} · ${escapeHtml(s.loc)}</span>`
       ).join('') + '</div>';
     }
     div.innerHTML = html;
+    const ob = div.querySelector('.to-outreach');
+    if (ob) ob.onclick = async () => {
+      ob.disabled = true; ob.textContent = 'drafting…';
+      try {
+        await api('/api/outreach/draft', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ box_path: m.box_path, action: 'Execute the Q&A plan of attack',
+                                 instructions: 'The plan:\n' + plan }),
+        });
+        ob.textContent = '✓ Draft created — review it in Dashboard → ✍ Outreach';
+      } catch (e) { ob.disabled = false; ob.textContent = 'failed: ' + e.message; }
+    };
     box.appendChild(div);
   }
   box.scrollTop = box.scrollHeight;
@@ -445,7 +477,7 @@ async function sendQuestion() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slug: selected.slug, question: q }),
     });
-    Object.assign(pending, { text: r.answer, sources: r.sources, pending: false });
+    Object.assign(pending, { text: r.answer, sources: r.sources, box_path: r.box_path, pending: false });
   } catch (e) {
     Object.assign(pending, { text: e.message, error: true, pending: false });
   }
